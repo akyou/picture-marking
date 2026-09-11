@@ -4,6 +4,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   AlignCenter,
   ArrowDownToLine,
+  ArrowUpRight,
+  Check,
+  Circle,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -23,6 +26,7 @@ import {
   RotateCcw,
   Save,
   Settings2,
+  Spline,
   Sparkles,
   StickyNote,
   Trash2,
@@ -144,7 +148,7 @@ export default function Page() {
     setSelectedId(item.id)
     setSelectedIds(nextIds)
     const point = getPoint(event)
-    const ids = selectedIds.includes(item.id) ? selectedIds : [item.id]
+    const ids = event.shiftKey ? nextIds : (selectedIds.includes(item.id) ? selectedIds : [item.id])
     const origins = Object.fromEntries(items.filter((candidate) => ids.includes(candidate.id) && candidate.kind !== 'stroke').map((candidate) => [candidate.id, { x: candidate.x, y: candidate.y }]))
     const strokePoints = Object.fromEntries(items.filter((candidate): candidate is Extract<Item, { kind: 'stroke' }> => ids.includes(candidate.id) && candidate.kind === 'stroke').map((candidate) => [candidate.id, candidate.points.map((strokePoint) => ({ ...strokePoint }))]))
     draggingRef.current = { id: item.id, start: point, origin: item.kind === 'stroke' ? { x: 0, y: 0 } : { x: item.x, y: item.y }, ids, origins, strokePoints, points: item.kind === 'stroke' ? item.points.map((strokePoint) => ({ ...strokePoint })) : undefined }
@@ -300,7 +304,7 @@ export default function Page() {
       </header>
       <div className="workspace">
         <aside className="left-rail">
-          <div className="rail-section"><p className="eyebrow">工具</p><ToolbarButton label="选择" active={tool === 'select'} onClick={() => setTool('select')}><MousePointer2 size={19} /></ToolbarButton><ToolbarButton label="手型" onClick={() => setTool('select')}><Hand size={19} /></ToolbarButton><ToolbarButton label="画笔" active={tool === 'pen'} onClick={() => setTool('pen')}><Pencil size={19} /></ToolbarButton><div className="stamp-palette" aria-label="Apple 风格矢量标记"><span className="eyebrow">标记</span><button type="button" title="箭头" onClick={() => addStamp('arrow')}>↗</button><button type="button" title="圆圈" onClick={() => addStamp('circle')}>○</button><button type="button" title="勾画" onClick={() => addStamp('check')}>⌄</button><button type="button" title="曲线" onClick={() => addStamp('curve')}>∿</button></div><ToolbarButton label="文字" active={tool === 'text'} onClick={addText}><Type size={19} /></ToolbarButton><ToolbarButton label="图片" onClick={() => fileRef.current?.click()}><ImagePlus size={19} /></ToolbarButton></div>
+          <div className="rail-section"><p className="eyebrow">工具</p><ToolbarButton label="选择" active={tool === 'select'} onClick={() => setTool('select')}><MousePointer2 size={19} /></ToolbarButton><ToolbarButton label="手型" onClick={() => setTool('select')}><Hand size={19} /></ToolbarButton><ToolbarButton label="画笔" active={tool === 'pen'} onClick={() => setTool('pen')}><Pencil size={19} /></ToolbarButton><div className="stamp-palette" aria-label="Apple 风格矢量标记"><span className="eyebrow">标记</span><button type="button" title="箭头" aria-label="插入箭头" onClick={() => addStamp('arrow')}><ArrowUpRight size={18} strokeWidth={2.2} /></button><button type="button" title="圆圈" aria-label="插入圆圈" onClick={() => addStamp('circle')}><Circle size={18} strokeWidth={2.2} /></button><button type="button" title="勾画" aria-label="插入勾画" onClick={() => addStamp('check')}><Check size={19} strokeWidth={2.4} /></button><button type="button" title="曲线" aria-label="插入曲线" onClick={() => addStamp('curve')}><Spline size={18} strokeWidth={2.2} /></button></div><ToolbarButton label="文字" active={tool === 'text'} onClick={addText}><Type size={19} /></ToolbarButton><ToolbarButton label="图片" onClick={() => fileRef.current?.click()}><ImagePlus size={19} /></ToolbarButton></div>
           <div className="rail-divider" />
           <div className="rail-section"><p className="eyebrow">视图</p><ToolbarButton label="图层"><Layers3 size={19} /></ToolbarButton><ToolbarButton label="设置"><Settings2 size={19} /></ToolbarButton></div>
         </aside>
