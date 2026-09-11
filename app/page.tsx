@@ -74,10 +74,10 @@ function strokeBounds(points: Point[]) {
 }
 
 function arrowGeometry(width: number, height: number, curve = 0, headSize = 38, headAngle = 28, tipInset = 20, tailLength = 100) {
-  const start = { x: 12, y: height - 24 }
-  const tailFactor = Math.max(0.2, Math.min(1.8, tailLength / 100))
-  const adjustedStart = { x: start.x + (width * 0.18) * (1 - tailFactor), y: start.y + (height * 0.18) * (1 - tailFactor) }
+  const baseStart = { x: 12, y: height - 24 }
   const tip = { x: width - tipInset, y: 24 }
+  const tailFactor = Math.max(0.2, Math.min(1.8, tailLength / 100))
+  const adjustedStart = { x: tip.x + (baseStart.x - tip.x) * tailFactor, y: tip.y + (baseStart.y - tip.y) * tailFactor }
   const dx = tip.x - adjustedStart.x
   const dy = tip.y - adjustedStart.y
   const length = Math.hypot(dx, dy) || 1
