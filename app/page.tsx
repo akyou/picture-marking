@@ -90,7 +90,10 @@ function arrowGeometry(width: number, height: number, curve = 0, headSize = 38, 
   const angle = (headAngle * sharpnessFactor * Math.PI) / 180
   const left = { x: tip.x - headSize * (ux * Math.cos(angle) - uy * Math.sin(angle)), y: tip.y - headSize * (uy * Math.cos(angle) + ux * Math.sin(angle)) }
   const right = { x: tip.x - headSize * (ux * Math.cos(angle) + uy * Math.sin(angle)), y: tip.y - headSize * (uy * Math.cos(angle) - ux * Math.sin(angle)) }
-  return { shaft: `M ${start.x} ${start.y} Q ${control.x} ${control.y} ${tip.x} ${tip.y}`, head: `M ${left.x} ${left.y} L ${tip.x} ${tip.y} L ${right.x} ${right.y}` }
+  const headBend = Math.min(headSize * 0.42, 24) * (headSharpness / 100)
+  const leftMid = { x: (left.x + tip.x) / 2 - uy * headBend, y: (left.y + tip.y) / 2 + ux * headBend }
+  const rightMid = { x: (right.x + tip.x) / 2 + uy * headBend, y: (right.y + tip.y) / 2 - ux * headBend }
+  return { shaft: `M ${start.x} ${start.y} Q ${control.x} ${control.y} ${tip.x} ${tip.y}`, head: `M ${left.x} ${left.y} Q ${leftMid.x} ${leftMid.y} ${tip.x} ${tip.y} M ${tip.x} ${tip.y} Q ${rightMid.x} ${rightMid.y} ${right.x} ${right.y}` }
 }
 
 function ToolbarButton({ label, active, onClick, children }: { label: string; active?: boolean; onClick?: () => void; children: React.ReactNode }) {
