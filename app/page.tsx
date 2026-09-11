@@ -141,7 +141,8 @@ export default function Page() {
   const onItemPointerDown = (event: React.PointerEvent, item: Item) => {
     if (tool !== 'select') return
     event.stopPropagation()
-    event.currentTarget.setPointerCapture(event.pointerId)
+    // 统一由画布接管指针捕获，保证标记从任意位置拖动时都能持续收到移动事件
+    canvasRef.current?.setPointerCapture(event.pointerId)
     const nextIds = event.shiftKey
       ? (selectedIds.includes(item.id) ? selectedIds.filter((id) => id !== item.id) : [...selectedIds, item.id])
       : [item.id]
