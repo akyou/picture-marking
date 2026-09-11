@@ -149,11 +149,14 @@ export default function Page() {
   }, [items])
 
   const scheduleItemsUpdate = (next: Item[]) => {
+    // 立即更新引用，下一次 pointermove 不会继续基于上一帧位置计算
+    itemsRef.current = next
     pendingItemsRef.current = next
     if (moveFrameRef.current !== null) return
     moveFrameRef.current = requestAnimationFrame(() => {
       if (pendingItemsRef.current) {
         setItems(pendingItemsRef.current)
+        itemsRef.current = pendingItemsRef.current
         pendingItemsRef.current = null
       }
       moveFrameRef.current = null
