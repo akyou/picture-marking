@@ -34,13 +34,13 @@ import {
 
 type Point = { x: number; y: number }
 type Item =
-  | { id: string; kind: 'text'; x: number; y: number; text: string; size: number; color: string; weight: string; italic: boolean; underline: boolean; align: 'left' | 'center' | 'right'; lineHeight: number; width: number }
+  | { id: string; kind: 'text'; x: number; y: number; text: string; size: number; color: string; weight: string; italic: boolean; underline: boolean; align: 'left' | 'center' | 'right'; lineHeight: number; letterSpacing: number; width: number }
   | { id: string; kind: 'image'; x: number; y: number; width: number; height: number; src: string; name: string; aspectRatio: number; lockRatio: boolean }
   | { id: string; kind: 'stroke'; points: Point[]; color: string; width: number; opacity: number }
 
 const initialItems: Item[] = [
-  { id: 'title', kind: 'text', x: 160, y: 120, text: '灵感画板', size: 42, color: '#17202a', weight: '700', italic: false, underline: false, align: 'left', lineHeight: 1.35, width: 520 },
-  { id: 'note', kind: 'text', x: 164, y: 188, text: '把想法画出来', size: 20, color: '#718096', weight: '400', italic: false, underline: false, align: 'left', lineHeight: 1.5, width: 420 },
+  { id: 'title', kind: 'text', x: 160, y: 120, text: '灵感画板', size: 42, color: '#17202a', weight: '700', italic: false, underline: false, align: 'left', lineHeight: 1.35, letterSpacing: 0, width: 520 },
+  { id: 'note', kind: 'text', x: 164, y: 188, text: '把想法画出来', size: 20, color: '#718096', weight: '400', italic: false, underline: false, align: 'left', lineHeight: 1.5, letterSpacing: 0, width: 420 },
 ]
 
 const colors = ['#ff6b4a', '#2778ff', '#23a582', '#f2b134', '#17202a']
@@ -52,6 +52,8 @@ function ToolbarButton({ label, active, onClick, children }: { label: string; ac
 export default function Page() {
   const [items, setItems] = useState<Item[]>(initialItems)
   const [selectedId, setSelectedId] = useState<string | null>('title')
+  const [selectedIds, setSelectedIds] = useState<string[]>(['title'])
+  const [selectionBox, setSelectionBox] = useState<{ start: Point; end: Point } | null>(null)
   const [tool, setTool] = useState<'select' | 'pen' | 'text'>('select')
   const [color, setColor] = useState('#ff6b4a')
   const [penWidth, setPenWidth] = useState(8)
@@ -64,7 +66,7 @@ export default function Page() {
   const canvasRef = useRef<HTMLDivElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const drawingRef = useRef<{ points: Point[] } | null>(null)
-  const draggingRef = useRef<{ id: string; start: Point; origin: Point; points?: Point[] } | null>(null)
+  const draggingRef = useRef<{ id: string; start: Point; origin: Point; points?: Point[]; ids?: string[]; origins?: Record<string, Point> } | null>(null)
 
   useEffect(() => {
     const stored = window.localStorage.getItem('calm-flow-board')
@@ -101,7 +103,13 @@ export default function Page() {
       drawingRef.current = { points: [getPoint(event)] }
       return
     }
-    if (tool === 'select') setSelectedId(null)
+    if (tool === 'select') {
+      const point = getPoint(event)
+      setSelectedId(null)
+      setSelectedIds([])
+      setSelectionBox({ start: point, end: point })
+      event.currentTarget.setPointerCapture(event.pointerId)
+    }
   }
 
   const onItemPointerDown = (event: React.PointerEvent, item: Item) => {
@@ -109,10 +117,13 @@ export default function Page() {
     event.stopPropagation()
     event.currentTarget.setPointerCapture(event.pointerId)
     setSelectedId(item.id)
+    setSelectedIds((prev) => prev.includes(item.id) ? prev : [item.id])
     const point = getPoint(event)
+    const ids = selectedIds.includes(item.id) ? selectedIds : [item.id]
+    const origins = Object.fromEntries(items.filter((candidate) => ids.includes(candidate.id) && candidate.kind !== 'stroke').map((candidate) => [candidate.id, { x: candidate.x, y: candidate.y }]))
     draggingRef.current = item.kind === 'stroke'
-      ? { id: item.id, start: point, origin: { x: 0, y: 0 }, points: item.points.map((strokePoint) => ({ ...strokePoint })) }
-      : { id: item.id, start: point, origin: { x: item.x, y: item.y } }
+      ? { id: item.id, start: point, origin: { x: 0, y: 0 }, points: item.points.map((strokePoint) => ({ ...strokePoint })), ids }
+      : { id: item.id, start: point, origin: { x: item.x, y: item.y }, ids, origins }
   }
 
   const onCanvasPointerMove = (event: React.PointerEvent) => {
@@ -124,20 +135,42 @@ export default function Page() {
       return
     }
     const dragging = draggingRef.current
-    if (!dragging) return
-    const point = getPoint(event)
-    const dx = point.x - dragging.start.x
-    const dy = point.y - dragging.start.y
-    setItems((prev) => prev.map((item) => {
-      if (item.id !== dragging.id) return item
-      if (item.kind === 'stroke' && dragging.points) {
-        return { ...item, points: dragging.points.map((strokePoint) => ({ x: strokePoint.x + dx, y: strokePoint.y + dy })) }
-      }
-      return { ...item, x: dragging.origin.x + dx, y: dragging.origin.y + dy } as Item
-    }))
+    if (dragging) {
+      const point = getPoint(event)
+      const dx = point.x - dragging.start.x
+      const dy = point.y - dragging.start.y
+      setItems((prev) => prev.map((item) => {
+        if (!dragging.ids?.includes(item.id)) return item
+        if (item.kind === 'stroke' && dragging.points) return { ...item, points: dragging.points.map((strokePoint) => ({ x: strokePoint.x + dx, y: strokePoint.y + dy })) }
+        const origin = dragging.origins?.[item.id] ?? dragging.origin
+        return { ...item, x: origin.x + dx, y: origin.y + dy } as Item
+      }))
+      return
+    }
+    if (selectionBox) {
+      setSelectionBox((box) => box ? { ...box, end: getPoint(event) } : box)
+      return
+    }
   }
 
   const onCanvasPointerUp = () => {
+    if (selectionBox) {
+      const left = Math.min(selectionBox.start.x, selectionBox.end.x)
+      const right = Math.max(selectionBox.start.x, selectionBox.end.x)
+      const top = Math.min(selectionBox.start.y, selectionBox.end.y)
+      const bottom = Math.max(selectionBox.start.y, selectionBox.end.y)
+      const ids = items.filter((item) => {
+        if (item.kind === 'stroke') {
+          const xs = item.points.map((point) => point.x)
+          const ys = item.points.map((point) => point.y)
+          return Math.max(...xs) >= left && Math.min(...xs) <= right && Math.max(...ys) >= top && Math.min(...ys) <= bottom
+        }
+        return item.x <= right && item.x + (item.kind === 'image' ? item.width : item.width) >= left && item.y <= bottom && item.y + (item.kind === 'image' ? item.height : item.size * item.lineHeight) >= top
+      }).map((item) => item.id)
+      setSelectedIds(ids)
+      setSelectedId(ids[0] ?? null)
+      setSelectionBox(null)
+    }
     if (drawingRef.current) {
       const points = drawingRef.current.points
       drawingRef.current = null
@@ -147,7 +180,7 @@ export default function Page() {
     draggingRef.current = null
   }
   const addText = () => {
-    const item: Item = { id: crypto.randomUUID(), kind: 'text', x: 260, y: 280, text: '双击编辑文字', size: 24, color, weight: '500', italic: false, underline: false, align: 'left', lineHeight: 1.45, width: 360 }
+    const item: Item = { id: crypto.randomUUID(), kind: 'text', x: 260, y: 280, text: '双击编辑文字', size: 24, color, weight: '500', italic: false, underline: false, align: 'left', lineHeight: 1.45, letterSpacing: 0, width: 360 }
     commit([...items, item]); setSelectedId(item.id); setTool('select')
   }
 
@@ -238,11 +271,11 @@ export default function Page() {
           <div className="editor-toolbar"><div className="tool-group"><button className="select-button"><MousePointer2 size={15} /> 选择 <ChevronDown size={14} /></button><span className="separator" /><button className="round-tool" onClick={undo} aria-label="撤销"><Undo2 size={17} /></button><button className="round-tool" onClick={redo} aria-label="重做"><Redo2 size={17} /></button></div><div className="tool-group"><button className="zoom-button" onClick={() => setZoom(Math.max(50, zoom - 10))}><Minus size={14} /></button><span className="zoom-value">{zoom}%</span><button className="zoom-button" onClick={() => setZoom(Math.min(150, zoom + 10))}><Plus size={14} /></button><span className="separator" /><button className="export-button" onClick={exportBoard}><ArrowDownToLine size={15} /> 导出</button></div></div>
           <div className="canvas-wrap"><div ref={canvasRef} className="board-canvas" style={{ transform: `scale(${zoom / 100})`, transformOrigin: 'top left' }} onPointerDown={onCanvasPointerDown} onPointerMove={onCanvasPointerMove} onPointerUp={onCanvasPointerUp} onContextMenu={(event) => { event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY }) }}>
             <div className="canvas-grid" />
-            {items.map((item) => item.kind === 'stroke' ? <svg key={item.id} className={`stroke-layer ${selectedId === item.id ? 'selected' : ''}`} style={{ left: 0, top: 0, width: '100%', height: '100%', pointerEvents: 'none' }}><path d={item.points.map((p, i) => `${i ? 'L' : 'M'} ${p.x} ${p.y}`).join(' ')} fill="none" stroke={item.color} strokeWidth={item.width} strokeOpacity={item.opacity} strokeLinecap="round" strokeLinejoin="round" style={{ pointerEvents: tool === 'select' ? 'stroke' : 'none' }} onPointerDown={(event) => onItemPointerDown(event, item)} onContextMenu={(event) => handleItemContextMenu(event, item)} /></svg> : item.kind === 'image' ? <div key={item.id} className={`board-image ${selectedId === item.id ? 'selected' : ''}`} style={{ left: item.x, top: item.y, width: item.width, height: item.height }} onPointerDown={(e) => onItemPointerDown(e, item)} onContextMenu={(e) => handleItemContextMenu(e, item)} onClick={(e) => { e.stopPropagation(); setSelectedId(item.id) }}><img src={item.src} alt={item.name} /><span className="resize-handle" /></div> : <div key={item.id} className={`board-text ${selectedId === item.id ? 'selected' : ''}`} style={{ left: item.x, top: item.y, width: item.width, color: item.color, fontSize: item.size, fontWeight: item.weight, fontStyle: item.italic ? 'italic' : 'normal', textDecoration: item.underline ? 'underline' : 'none', textAlign: item.align, lineHeight: item.lineHeight, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }} onPointerDown={(e) => onItemPointerDown(e, item)} onContextMenu={(e) => handleItemContextMenu(e, item)} onClick={(e) => { e.stopPropagation(); setSelectedId(item.id) }} onDoubleClick={() => { const text = window.prompt('编辑文字', item.text); if (text) updateSelected({ text }) }}>{item.text}</div>)}
+            {items.map((item) => item.kind === 'stroke' ? <svg key={item.id} className={`stroke-layer ${selectedId === item.id ? 'selected' : ''}`} style={{ left: 0, top: 0, width: '100%', height: '100%', pointerEvents: 'none' }}><path d={item.points.map((p, i) => `${i ? 'L' : 'M'} ${p.x} ${p.y}`).join(' ')} fill="none" stroke={item.color} strokeWidth={item.width} strokeOpacity={item.opacity} strokeLinecap="round" strokeLinejoin="round" style={{ pointerEvents: tool === 'select' ? 'stroke' : 'none' }} onPointerDown={(event) => onItemPointerDown(event, item)} onContextMenu={(event) => handleItemContextMenu(event, item)} /></svg> : item.kind === 'image' ? <div key={item.id} className={`board-image ${selectedId === item.id ? 'selected' : ''}`} style={{ left: item.x, top: item.y, width: item.width, height: item.height }} onPointerDown={(e) => onItemPointerDown(e, item)} onContextMenu={(e) => handleItemContextMenu(e, item)} onClick={(e) => { e.stopPropagation(); setSelectedId(item.id) }}><img src={item.src} alt={item.name} /><span className="resize-handle" /></div> : <div key={item.id} className={`board-text ${selectedId === item.id ? 'selected' : ''}`} style={{ left: item.x, top: item.y, width: item.width, color: item.color, fontSize: item.size, letterSpacing: item.letterSpacing, fontWeight: item.weight, fontStyle: item.italic ? 'italic' : 'normal', textDecoration: item.underline ? 'underline' : 'none', textAlign: item.align, lineHeight: item.lineHeight, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }} onPointerDown={(e) => onItemPointerDown(e, item)} onContextMenu={(e) => handleItemContextMenu(e, item)} onClick={(e) => { e.stopPropagation(); setSelectedId(item.id) }} onDoubleClick={() => { const text = window.prompt('编辑文字', item.text); if (text) updateSelected({ text }) }}>{item.text}</div>)}
             <div className="canvas-caption"><span className="caption-dot" /> 新建画布 <span className="caption-muted">· 自动保存</span></div>
           </div></div>
         </section>
-        <aside className="properties-panel"><div className="panel-heading"><div><p className="eyebrow">检查器</p><h2>{selected ? selected.kind === 'text' ? '文字属性' : selected.kind === 'image' ? '图片属性' : '画笔属性' : '未选择对象'}</h2></div><button className="icon-ghost"><MoreHorizontal size={18} /></button></div>{selected ? <div className="property-content">{selected.kind === 'image' && <><div className="property-row"><label>宽度<input type="number" min="1" value={selected.width} onChange={(e) => { const width = Math.max(1, Number(e.target.value)); updateSelected({ width, height: selected.lockRatio ? Math.round(width / (selected.aspectRatio || selected.width / selected.height)) : selected.height }) }} /></label><label>高度<input type="number" min="1" value={selected.height} onChange={(e) => { const height = Math.max(1, Number(e.target.value)); updateSelected({ height, width: selected.lockRatio ? Math.round(height * selected.aspectRatio) : selected.width }) }} /></label></div><button type="button" className={`style-toggles ${selected.lockRatio ? 'active' : ''}`} onClick={() => updateSelected({ lockRatio: !selected.lockRatio })}>锁定等比例缩放</button><p className="property-hint">已按原始尺寸导入，可直接调整宽高</p></>}{selected.kind === 'text' && <><label>内容<textarea rows={4} value={selected.text} onChange={(e) => updateSelected({ text: e.target.value })} placeholder="输入文字，支持换行" /></label><label>行宽<input type="number" min="40" max="900" step="10" value={selected.width} onChange={(e) => updateSelected({ width: Math.max(40, Number(e.target.value) || 40) })} /></label><div className="property-row"><label>字重<select value={selected.weight} onChange={(e) => updateSelected({ weight: e.target.value })}><option value="400">常规</option><option value="500">中等</option><option value="600">半粗</option><option value="700">粗体</option></select></label><label>对齐<select value={selected.align} onChange={(e) => updateSelected({ align: e.target.value as 'left' | 'center' | 'right' })}><option value="left">左对齐</option><option value="center">居中</option><option value="right">右对齐</option></select></label></div><div className="property-row"><label>行高<input type="number" min="1" max="3" step="0.05" value={selected.lineHeight} onChange={(e) => updateSelected({ lineHeight: Number(e.target.value) })} /></label><label>宽度<input type="number" min="80" max="900" value={selected.width} onChange={(e) => updateSelected({ width: Number(e.target.value) })} /></label></div><div className="style-toggles"><button type="button" className={selected.italic ? 'active' : ''} onClick={() => updateSelected({ italic: !selected.italic })}><em>I</em> 斜体</button><button type="button" className={selected.underline ? 'active' : ''} onClick={() => updateSelected({ underline: !selected.underline })}><u>U</u> 下划线</button></div><div className="property-row"><label>字号<input type="number" value={selected.size} onChange={(e) => updateSelected({ size: Number(e.target.value) })} /></label><label>对齐<button className="mini-select"><AlignCenter size={15} /> 居中</button></label></div><label>颜色<div className="color-row">{colors.map((c) => <button key={c} className={`color-swatch ${selected.color === c ? 'chosen' : ''}`} style={{ backgroundColor: c }} onClick={() => updateSelected({ color: c })} />)}<input className="hex-input" value={selected.color} onChange={(e) => updateSelected({ color: e.target.value })} /></div></label></>}{selected.kind === 'stroke' && <><label>笔触颜色<div className="color-row">{colors.map((c) => <button key={c} className={`color-swatch ${selected.color === c ? 'chosen' : ''}`} style={{ backgroundColor: c }} onClick={() => updateSelected({ color: c })} />)}</div></label><label>粗细<div className="range-row"><input type="range" min="2" max="32" value={selected.width} onChange={(e) => updateSelected({ width: Number(e.target.value) })} /><span>{selected.width}px</span></div></label><label>透明度<div className="range-row"><input type="range" min="10" max="100" value={selected.opacity * 100} onChange={(e) => updateSelected({ opacity: Number(e.target.value) / 100 })} /><span>{Math.round(selected.opacity * 100)}%</span></div></label></>}{selected.kind === 'image' && <><label>文件名<input value={selected.name} readOnly /></label><div className="property-row"><label>宽度<input type="number" value={selected.width} onChange={(e) => updateSelected({ width: Number(e.target.value) })} /></label><label>高度<input type="number" value={selected.height} onChange={(e) => updateSelected({ height: Number(e.target.value) })} /></label></div></>}<div className="panel-actions"><button onClick={deleteSelected} className="danger-button"><Trash2 size={15} /> 删除对象</button><button className="secondary-button" onClick={() => { const copyItem = { ...selected, id: crypto.randomUUID(), x: selected.x + 24, y: selected.y + 24 } as Item; commit([...items, copyItem]); setSelectedId(copyItem.id) }}><Copy size={15} /> 复制</button></div></div> : <div className="empty-inspector"><MousePointer2 size={22} /><p>选择画布中的对象<br />查看和编辑属性</p></div>}<div className="layers-list"><div className="layers-title"><span>图层</span><span className="layer-count">{items.length}</span></div>{items.slice().reverse().map((item) => <button key={item.id} className={`layer-item ${selectedId === item.id ? 'selected' : ''}`} onClick={() => setSelectedId(item.id)}>{item.kind === 'text' ? <Type size={14} /> : item.kind === 'image' ? <ImagePlus size={14} /> : <Pencil size={14} />}<span>{item.kind === 'text' ? item.text : item.kind === 'image' ? item.name : '平滑笔触'}</span></button>)}</div></aside>
+        <aside className="properties-panel"><div className="panel-heading"><div><p className="eyebrow">检查器</p><h2>{selected ? selected.kind === 'text' ? '文字属性' : selected.kind === 'image' ? '图片属性' : '画笔属性' : '未选择对象'}</h2></div><button className="icon-ghost"><MoreHorizontal size={18} /></button></div>{selected ? <div className="property-content">{selected.kind === 'image' && <><div className="property-row"><label>宽度<input type="number" min="1" value={selected.width} onChange={(e) => { const width = Math.max(1, Number(e.target.value)); updateSelected({ width, height: selected.lockRatio ? Math.round(width / (selected.aspectRatio || selected.width / selected.height)) : selected.height }) }} /></label><label>高度<input type="number" min="1" value={selected.height} onChange={(e) => { const height = Math.max(1, Number(e.target.value)); updateSelected({ height, width: selected.lockRatio ? Math.round(height * selected.aspectRatio) : selected.width }) }} /></label></div><button type="button" className={`style-toggles ${selected.lockRatio ? 'active' : ''}`} onClick={() => updateSelected({ lockRatio: !selected.lockRatio })}>锁定等比例缩放</button><p className="property-hint">已按原始尺寸导入，可直接调整宽高</p></>}{selected.kind === 'text' && <><label>内容<textarea rows={4} value={selected.text} onChange={(e) => updateSelected({ text: e.target.value })} placeholder="输入文字，支持换行" /></label><div className="property-row"><label>字体间距<input type="number" min="-5" max="30" step="0.5" value={selected.letterSpacing} onChange={(e) => updateSelected({ letterSpacing: Number(e.target.value) || 0 })} /></label><label>文字区域宽度<input type="number" min="40" max="900" step="10" value={selected.width} onChange={(e) => updateSelected({ width: Math.max(40, Number(e.target.value) || 40) })} /></label></div><div className="property-row"><label>字重<select value={selected.weight} onChange={(e) => updateSelected({ weight: e.target.value })}><option value="400">常规</option><option value="500">中等</option><option value="600">半粗</option><option value="700">粗体</option></select></label><label>对齐<select value={selected.align} onChange={(e) => updateSelected({ align: e.target.value as 'left' | 'center' | 'right' })}><option value="left">左对齐</option><option value="center">居中</option><option value="right">右对齐</option></select></label></div><div className="property-row"><label>行高<input type="number" min="1" max="3" step="0.05" value={selected.lineHeight} onChange={(e) => updateSelected({ lineHeight: Number(e.target.value) })} /></label><label>宽度<input type="number" min="80" max="900" value={selected.width} onChange={(e) => updateSelected({ width: Number(e.target.value) })} /></label></div><div className="style-toggles"><button type="button" className={selected.italic ? 'active' : ''} onClick={() => updateSelected({ italic: !selected.italic })}><em>I</em> 斜体</button><button type="button" className={selected.underline ? 'active' : ''} onClick={() => updateSelected({ underline: !selected.underline })}><u>U</u> 下划线</button></div><div className="property-row"><label>字号<input type="number" value={selected.size} onChange={(e) => updateSelected({ size: Number(e.target.value) })} /></label><label>对齐<button className="mini-select"><AlignCenter size={15} /> 居中</button></label></div><label>颜色<div className="color-row">{colors.map((c) => <button key={c} className={`color-swatch ${selected.color === c ? 'chosen' : ''}`} style={{ backgroundColor: c }} onClick={() => updateSelected({ color: c })} />)}<input className="hex-input" value={selected.color} onChange={(e) => updateSelected({ color: e.target.value })} /></div></label></>}{selected.kind === 'stroke' && <><label>笔触颜色<div className="color-row">{colors.map((c) => <button key={c} className={`color-swatch ${selected.color === c ? 'chosen' : ''}`} style={{ backgroundColor: c }} onClick={() => updateSelected({ color: c })} />)}</div></label><label>粗细<div className="range-row"><input type="range" min="2" max="32" value={selected.width} onChange={(e) => updateSelected({ width: Number(e.target.value) })} /><span>{selected.width}px</span></div></label><label>透明度<div className="range-row"><input type="range" min="10" max="100" value={selected.opacity * 100} onChange={(e) => updateSelected({ opacity: Number(e.target.value) / 100 })} /><span>{Math.round(selected.opacity * 100)}%</span></div></label></>}{selected.kind === 'image' && <><label>文件名<input value={selected.name} readOnly /></label><div className="property-row"><label>宽度<input type="number" value={selected.width} onChange={(e) => updateSelected({ width: Number(e.target.value) })} /></label><label>高度<input type="number" value={selected.height} onChange={(e) => updateSelected({ height: Number(e.target.value) })} /></label></div></>}<div className="panel-actions"><button onClick={deleteSelected} className="danger-button"><Trash2 size={15} /> 删除对象</button><button className="secondary-button" onClick={() => { const copyItem = { ...selected, id: crypto.randomUUID(), x: selected.x + 24, y: selected.y + 24 } as Item; commit([...items, copyItem]); setSelectedId(copyItem.id) }}><Copy size={15} /> 复制</button></div></div> : <div className="empty-inspector"><MousePointer2 size={22} /><p>选择画布中的对象<br />查看和编辑属性</p></div>}<div className="layers-list"><div className="layers-title"><span>图层</span><span className="layer-count">{items.length}</span></div>{items.slice().reverse().map((item) => <button key={item.id} className={`layer-item ${selectedId === item.id ? 'selected' : ''}`} onClick={() => setSelectedId(item.id)}>{item.kind === 'text' ? <Type size={14} /> : item.kind === 'image' ? <ImagePlus size={14} /> : <Pencil size={14} />}<span>{item.kind === 'text' ? item.text : item.kind === 'image' ? item.name : '平滑笔触'}</span></button>)}</div></aside>
       </div>
       {contextMenu && <div className="context-menu" style={{ left: contextMenu.x, top: contextMenu.y }} onClick={(e) => e.stopPropagation()}><button onClick={() => { setTool('pen'); setContextMenu(null) }}><Pencil size={15} /> 在此绘制</button><button onClick={() => { setTool('select'); setContextMenu(null) }}><Settings2 size={15} /> 调整属性</button><button onClick={() => moveLayer('front')}><ArrowDownToLine size={15} /> 置于顶层</button><button onClick={() => moveLayer('back')}><ArrowDownToLine size={15} className="rotate-180" /> 置于底层</button><div className="context-line" /><button onClick={deleteSelected}><Trash2 size={15} /> 删除</button></div>}
       <input ref={fileRef} hidden type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && readFile(e.target.files[0])} />
