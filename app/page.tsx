@@ -94,6 +94,7 @@ export default function Page() {
   const [selectedId, setSelectedId] = useState<string | null>('title')
   const [selectedIds, setSelectedIds] = useState<string[]>(['title'])
   const [selectionBox, setSelectionBox] = useState<{ start: Point; end: Point } | null>(null)
+  const selectionStartRef = useRef<Point | null>(null)
   const [tool, setTool] = useState<'select' | 'pen' | 'text'>('select')
   const [color, setColor] = useState('#ff6b4a')
   const [penWidth, setPenWidth] = useState(8)
@@ -144,12 +145,15 @@ export default function Page() {
       return
     }
     if (tool === 'select') {
+      // 只有点击画布空白处才启动框选；点击对象不会把已有选择带入框选
+      if (event.target !== event.currentTarget) return
       const point = getPoint(event)
       if (!event.shiftKey) {
         setSelectedId(null)
         setSelectedIds([])
       }
-      setSelectionBox({ start: point, end: point })
+      selectionStartRef.current = point
+      setSelectionBox(null)
       event.currentTarget.setPointerCapture(event.pointerId)
     }
   }
@@ -165,10 +169,11 @@ export default function Page() {
     const nextIds = event.shiftKey
       ? (selectedIds.includes(item.id) ? selectedIds.filter((id) => id !== item.id) : [...selectedIds, item.id])
       : [item.id]
-    setSelectedId(item.id)
+    setSelectedId(event.shiftKey && selectedIds.includes(item.id) ? (nextIds[0] ?? null) : item.id)
     setSelectedIds(nextIds)
     const point = getPoint(event)
-    const ids = event.shiftKey ? nextIds : (selectedIds.includes(item.id) ? selectedIds : [item.id])
+    // 普通点击永远只拖动当前对象；只有 Shift 才携带已有多选对象
+    const ids = event.shiftKey ? nextIds : [item.id]
     const origins = Object.fromEntries(items.filter((candidate) => ids.includes(candidate.id) && candidate.kind !== 'stroke').map((candidate) => [candidate.id, { x: candidate.x, y: candidate.y }]))
     const strokePoints = Object.fromEntries(items.filter((candidate): candidate is Extract<Item, { kind: 'stroke' }> => ids.includes(candidate.id) && candidate.kind === 'stroke').map((candidate) => [candidate.id, candidate.points.map((strokePoint) => ({ ...strokePoint }))]))
     draggingRef.current = { id: item.id, start: point, origin: item.kind === 'stroke' ? { x: 0, y: 0 } : { x: item.x, y: item.y }, ids, origins, strokePoints, points: item.kind === 'stroke' ? item.points.map((strokePoint) => ({ ...strokePoint })) : undefined }
@@ -211,13 +216,20 @@ export default function Page() {
       }))
       return
     }
-    if (selectionBox) {
-      setSelectionBox((box) => box ? { ...box, end: getPoint(event) } : box)
+    if (selectionStartRef.current) {
+      const point = getPoint(event)
+      const start = selectionStartRef.current
+      const moved = Math.hypot(point.x - start.x, point.y - start.y)
+      if (moved >= 6) setSelectionBox({ start, end: point })
       return
     }
   }
 
   const onCanvasPointerUp = () => {
+    if (!selectionBox) {
+      selectionStartRef.current = null
+      return
+    }
     if (selectionBox) {
       const left = Math.min(selectionBox.start.x, selectionBox.end.x)
       const right = Math.max(selectionBox.start.x, selectionBox.end.x)
@@ -236,6 +248,7 @@ export default function Page() {
       setSelectedIds(ids)
       setSelectedId(ids[0] ?? null)
       setSelectionBox(null)
+      selectionStartRef.current = null
     }
     if (drawingRef.current) {
       const points = drawingRef.current.points
