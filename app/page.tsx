@@ -119,7 +119,7 @@ export default function Page() {
   const canvasRef = useRef<HTMLDivElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const drawingRef = useRef<{ points: Point[] } | null>(null)
-  const draggingRef = useRef<{ id: string; start: Point; origin: Point; points?: Point[]; ids?: string[]; origins?: Record<string, Point>; strokePoints?: Record<string, Point[]>; resize?: { width: number; height: number; aspectRatio: number } } | null>(null)
+  const draggingRef = useRef<{ id: string; start: Point; origin: Point; points?: Point[]; ids?: string[]; origins?: Record<string, Point>; strokePoints?: Record<string, Point[]>; resize?: { width: number; height: number; aspectRatio: number }; canvasRect?: DOMRect; zoom: number } | null>(null)
   const itemsRef = useRef(items)
   const moveFrameRef = useRef<number | null>(null)
   const pendingItemsRef = useRef<Item[] | null>(null)
@@ -208,18 +208,20 @@ export default function Page() {
     setSelectedId(event.shiftKey && selectedIds.includes(item.id) ? (nextIds[0] ?? null) : item.id)
     setSelectedIds(nextIds)
     const point = getPoint(event)
+    const canvasRect = canvasRef.current?.getBoundingClientRect()
     // 普通点击永远只拖动当前对象；只有 Shift 才携带已有多选对象
     const ids = event.shiftKey ? nextIds : [item.id]
     const origins = Object.fromEntries(items.filter((candidate) => ids.includes(candidate.id) && candidate.kind !== 'stroke').map((candidate) => [candidate.id, { x: candidate.x, y: candidate.y }]))
     const strokePoints = Object.fromEntries(items.filter((candidate): candidate is Extract<Item, { kind: 'stroke' }> => ids.includes(candidate.id) && candidate.kind === 'stroke').map((candidate) => [candidate.id, candidate.points.map((strokePoint) => ({ ...strokePoint }))]))
-    draggingRef.current = { id: item.id, start: point, origin: item.kind === 'stroke' ? { x: 0, y: 0 } : { x: item.x, y: item.y }, ids, origins, strokePoints, points: item.kind === 'stroke' ? item.points.map((strokePoint) => ({ ...strokePoint })) : undefined }
+    draggingRef.current = { id: item.id, start: point, origin: item.kind === 'stroke' ? { x: 0, y: 0 } : { x: item.x, y: item.y }, ids, origins, strokePoints, points: item.kind === 'stroke' ? item.points.map((strokePoint) => ({ ...strokePoint })) : undefined, canvasRect, zoom }
   }
 
   const onStampResizePointerDown = (event: React.PointerEvent, item: Extract<Item, { kind: 'stamp' }>) => {
     if (item.locked) return
     event.stopPropagation()
     event.currentTarget.setPointerCapture(event.pointerId)
-    draggingRef.current = { id: item.id, start: getPoint(event), origin: { x: item.x, y: item.y }, ids: [item.id], origins: { [item.id]: { x: item.x, y: item.y } }, resize: { width: item.width, height: item.height, aspectRatio: item.width / item.height } }
+    const canvasRect = canvasRef.current?.getBoundingClientRect()
+    draggingRef.current = { id: item.id, start: getPoint(event), origin: { x: item.x, y: item.y }, ids: [item.id], origins: { [item.id]: { x: item.x, y: item.y } }, resize: { width: item.width, height: item.height, aspectRatio: item.width / item.height }, canvasRect, zoom }
   }
 
   const onCanvasPointerMove = (event: React.PointerEvent) => {
@@ -232,7 +234,7 @@ export default function Page() {
     }
     const dragging = draggingRef.current
     if (dragging) {
-      const point = getPoint(event)
+      const point = dragging.canvasRect ? { x: (event.clientX - dragging.canvasRect.left) * (100 / dragging.zoom), y: (event.clientY - dragging.canvasRect.top) * (100 / dragging.zoom) } : getPoint(event)
       const dx = point.x - dragging.start.x
       const dy = point.y - dragging.start.y
       scheduleItemsUpdate(itemsRef.current.map((item) => {
