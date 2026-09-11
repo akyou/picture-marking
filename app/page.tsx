@@ -120,6 +120,10 @@ export default function Page() {
   const fileRef = useRef<HTMLInputElement>(null)
   const drawingRef = useRef<{ points: Point[] } | null>(null)
   const draggingRef = useRef<{ id: string; start: Point; origin: Point; points?: Point[]; ids?: string[]; origins?: Record<string, Point>; strokePoints?: Record<string, Point[]>; resize?: { width: number; height: number; aspectRatio: number } } | null>(null)
+  const itemsRef = useRef(items)
+  const moveFrameRef = useRef<number | null>(null)
+  const pendingItemsRef = useRef<Item[] | null>(null)
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     const stored = window.localStorage.getItem('calm-flow-board')
@@ -129,15 +133,32 @@ export default function Page() {
   }, [])
 
   useEffect(() => {
-    const persistentItems = items.filter((item) => item.id !== 'draft')
-    try {
-      window.localStorage.setItem('calm-flow-board', JSON.stringify(persistentItems))
-    } catch (error) {
-      if (error instanceof DOMException && error.name === 'QuotaExceededError') {
-        console.warn('[v0] 画板内容超过浏览器存储容量，已跳过本次自动保存')
+    itemsRef.current = items
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    saveTimerRef.current = setTimeout(() => {
+      const persistentItems = items.filter((item) => item.id !== 'draft')
+      try {
+        window.localStorage.setItem('calm-flow-board', JSON.stringify(persistentItems))
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+          console.warn('[v0] 画板内容超过浏览器存储容量，已跳过本次自动保存')
+        }
       }
-    }
+    }, 140)
+    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current) }
   }, [items])
+
+  const scheduleItemsUpdate = (next: Item[]) => {
+    pendingItemsRef.current = next
+    if (moveFrameRef.current !== null) return
+    moveFrameRef.current = requestAnimationFrame(() => {
+      if (pendingItemsRef.current) {
+        setItems(pendingItemsRef.current)
+        pendingItemsRef.current = null
+      }
+      moveFrameRef.current = null
+    })
+  }
 
   const commit = useCallback((next: Item[]) => {
     setHistory((prev) => [...prev.slice(-19), items])
@@ -211,7 +232,7 @@ export default function Page() {
       const point = getPoint(event)
       const dx = point.x - dragging.start.x
       const dy = point.y - dragging.start.y
-      setItems((prev) => prev.map((item) => {
+      scheduleItemsUpdate(itemsRef.current.map((item) => {
         if (!dragging.ids?.includes(item.id)) return item
         if (dragging.resize && item.kind === 'stamp') {
           const width = Math.max(40, dragging.resize.width + dx)
