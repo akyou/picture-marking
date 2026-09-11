@@ -64,7 +64,7 @@ export default function Page() {
   const canvasRef = useRef<HTMLDivElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const drawingRef = useRef<{ points: Point[] } | null>(null)
-  const draggingRef = useRef<{ id: string; start: Point; origin: Point } | null>(null)
+  const draggingRef = useRef<{ id: string; start: Point; origin: Point; points?: Point[] } | null>(null)
 
   useEffect(() => {
     const stored = window.localStorage.getItem('calm-flow-board')
@@ -105,12 +105,14 @@ export default function Page() {
   }
 
   const onItemPointerDown = (event: React.PointerEvent, item: Item) => {
-    if (tool !== 'select' || item.kind === 'stroke') return
+    if (tool !== 'select') return
     event.stopPropagation()
     event.currentTarget.setPointerCapture(event.pointerId)
     setSelectedId(item.id)
     const point = getPoint(event)
-    draggingRef.current = { id: item.id, start: point, origin: { x: item.x, y: item.y } }
+    draggingRef.current = item.kind === 'stroke'
+      ? { id: item.id, start: point, origin: { x: 0, y: 0 }, points: item.points.map((strokePoint) => ({ ...strokePoint })) }
+      : { id: item.id, start: point, origin: { x: item.x, y: item.y } }
   }
 
   const onCanvasPointerMove = (event: React.PointerEvent) => {
@@ -126,7 +128,13 @@ export default function Page() {
     const point = getPoint(event)
     const dx = point.x - dragging.start.x
     const dy = point.y - dragging.start.y
-    setItems((prev) => prev.map((item) => item.id === dragging.id ? ({ ...item, x: dragging.origin.x + dx, y: dragging.origin.y + dy } as Item) : item))
+    setItems((prev) => prev.map((item) => {
+      if (item.id !== dragging.id) return item
+      if (item.kind === 'stroke' && dragging.points) {
+        return { ...item, points: dragging.points.map((strokePoint) => ({ x: strokePoint.x + dx, y: strokePoint.y + dy })) }
+      }
+      return { ...item, x: dragging.origin.x + dx, y: dragging.origin.y + dy } as Item
+    }))
   }
 
   const onCanvasPointerUp = () => {
@@ -151,6 +159,20 @@ export default function Page() {
     }
     reader.readAsDataURL(file)
   }
+
+  useEffect(() => {
+    const onPaste = (event: ClipboardEvent) => {
+      const target = event.target as HTMLElement | null
+      if (target?.matches('input, textarea, [contenteditable="true"]')) return
+      const imageItem = Array.from(event.clipboardData?.items ?? []).find((item) => item.type.startsWith('image/'))
+      const file = imageItem?.getAsFile()
+      if (!file) return
+      event.preventDefault()
+      readFile(new File([file], file.name || `粘贴图片-${Date.now()}.png`, { type: file.type }))
+    }
+    window.addEventListener('paste', onPaste)
+    return () => window.removeEventListener('paste', onPaste)
+  }, [items])
 
   const undo = () => {
     const previous = history.at(-1)
@@ -194,7 +216,7 @@ export default function Page() {
           <div className="editor-toolbar"><div className="tool-group"><button className="select-button"><MousePointer2 size={15} /> 选择 <ChevronDown size={14} /></button><span className="separator" /><button className="round-tool" onClick={undo} aria-label="撤销"><Undo2 size={17} /></button><button className="round-tool" onClick={redo} aria-label="重做"><Redo2 size={17} /></button></div><div className="tool-group"><button className="zoom-button" onClick={() => setZoom(Math.max(50, zoom - 10))}><Minus size={14} /></button><span className="zoom-value">{zoom}%</span><button className="zoom-button" onClick={() => setZoom(Math.min(150, zoom + 10))}><Plus size={14} /></button><span className="separator" /><button className="export-button" onClick={exportBoard}><ArrowDownToLine size={15} /> 导出</button></div></div>
           <div className="canvas-wrap"><div ref={canvasRef} className="board-canvas" style={{ transform: `scale(${zoom / 100})`, transformOrigin: 'top left' }} onPointerDown={onCanvasPointerDown} onPointerMove={onCanvasPointerMove} onPointerUp={onCanvasPointerUp} onContextMenu={(event) => { event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY }) }}>
             <div className="canvas-grid" />
-            {items.map((item) => item.kind === 'stroke' ? <svg key={item.id} className="stroke-layer" style={{ left: 0, top: 0, width: '100%', height: '100%', pointerEvents: 'none' }}><path d={item.points.map((p, i) => `${i ? 'L' : 'M'} ${p.x} ${p.y}`).join(' ')} fill="none" stroke={item.color} strokeWidth={item.width} strokeOpacity={item.opacity} strokeLinecap="round" strokeLinejoin="round" /></svg> : item.kind === 'image' ? <div key={item.id} className={`board-image ${selectedId === item.id ? 'selected' : ''}`} style={{ left: item.x, top: item.y, width: item.width, height: item.height }} onPointerDown={(e) => onItemPointerDown(e, item)} onClick={(e) => { e.stopPropagation(); setSelectedId(item.id) }}><img src={item.src} alt={item.name} /><span className="resize-handle" /></div> : <div key={item.id} className={`board-text ${selectedId === item.id ? 'selected' : ''}`} style={{ left: item.x, top: item.y, color: item.color, fontSize: item.size, fontWeight: item.weight }} onPointerDown={(e) => onItemPointerDown(e, item)} onClick={(e) => { e.stopPropagation(); setSelectedId(item.id) }} onDoubleClick={() => { const text = window.prompt('编辑文字', item.text); if (text) updateSelected({ text }) }}>{item.text}</div>)}
+            {items.map((item) => item.kind === 'stroke' ? <svg key={item.id} className={`stroke-layer ${selectedId === item.id ? 'selected' : ''}`} style={{ left: 0, top: 0, width: '100%', height: '100%', pointerEvents: 'auto' }}><path d={item.points.map((p, i) => `${i ? 'L' : 'M'} ${p.x} ${p.y}`).join(' ')} fill="none" stroke={item.color} strokeWidth={item.width} strokeOpacity={item.opacity} strokeLinecap="round" strokeLinejoin="round" style={{ pointerEvents: tool === 'select' ? 'stroke' : 'none' }} onPointerDown={(event) => onItemPointerDown(event, item)} /></svg> : item.kind === 'image' ? <div key={item.id} className={`board-image ${selectedId === item.id ? 'selected' : ''}`} style={{ left: item.x, top: item.y, width: item.width, height: item.height }} onPointerDown={(e) => onItemPointerDown(e, item)} onClick={(e) => { e.stopPropagation(); setSelectedId(item.id) }}><img src={item.src} alt={item.name} /><span className="resize-handle" /></div> : <div key={item.id} className={`board-text ${selectedId === item.id ? 'selected' : ''}`} style={{ left: item.x, top: item.y, color: item.color, fontSize: item.size, fontWeight: item.weight }} onPointerDown={(e) => onItemPointerDown(e, item)} onClick={(e) => { e.stopPropagation(); setSelectedId(item.id) }} onDoubleClick={() => { const text = window.prompt('编辑文字', item.text); if (text) updateSelected({ text }) }}>{item.text}</div>)}
             <div className="canvas-caption"><span className="caption-dot" /> 新建画布 <span className="caption-muted">· 自动保存</span></div>
           </div></div>
         </section>
