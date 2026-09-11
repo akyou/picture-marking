@@ -93,9 +93,11 @@ export default function Page() {
     drawingRef.current = { points: [getPoint(event)] }
   }
   const onCanvasPointerMove = (event: React.PointerEvent) => {
-    if (!drawingRef.current) return
-    drawingRef.current.points.push(getPoint(event))
-    setItems((prev) => [...prev.filter((item) => item.id !== 'draft'), { id: 'draft', kind: 'stroke', points: drawingRef.current!.points, color, width: penWidth, opacity: opacity / 100 }])
+    const drawing = drawingRef.current
+    if (!drawing) return
+    drawing.points.push(getPoint(event))
+    const points = [...drawing.points]
+    setItems((prev) => [...prev.filter((item) => item.id !== 'draft'), { id: 'draft', kind: 'stroke', points, color, width: penWidth, opacity: opacity / 100 }])
   }
   const onCanvasPointerUp = () => {
     if (!drawingRef.current) return
