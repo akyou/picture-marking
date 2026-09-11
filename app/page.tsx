@@ -155,7 +155,10 @@ export default function Page() {
   }
 
   const onItemPointerDown = (event: React.PointerEvent, item: Item) => {
-    if (tool !== 'select' || item.locked || item.hidden) return
+    if (tool !== 'select' || item.locked || item.hidden) {
+      event.stopPropagation()
+      return
+    }
     event.stopPropagation()
     // 在实际命中的图层上捕获指针，保证标记可从透明区域持续自由拖动
     event.currentTarget.setPointerCapture(event.pointerId)
@@ -221,6 +224,8 @@ export default function Page() {
       const top = Math.min(selectionBox.start.y, selectionBox.end.y)
       const bottom = Math.max(selectionBox.start.y, selectionBox.end.y)
       const ids = items.filter((item) => {
+        // 锁定或隐藏图层完全不参与框选，只有从图层面板解锁后才能重新选中
+        if (item.locked || item.hidden) return false
         if (item.kind === 'stroke') {
           const xs = item.points.map((point) => point.x)
           const ys = item.points.map((point) => point.y)
