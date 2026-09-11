@@ -73,7 +73,14 @@ export default function Page() {
   }, [])
 
   useEffect(() => {
-    window.localStorage.setItem('calm-flow-board', JSON.stringify(items))
+    const persistentItems = items.filter((item) => item.id !== 'draft')
+    try {
+      window.localStorage.setItem('calm-flow-board', JSON.stringify(persistentItems))
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+        console.warn('[v0] 画板内容超过浏览器存储容量，已跳过本次自动保存')
+      }
+    }
   }, [items])
 
   const commit = useCallback((next: Item[]) => {
