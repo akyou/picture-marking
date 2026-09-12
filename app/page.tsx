@@ -355,6 +355,19 @@ export default function Page() {
     return () => window.removeEventListener('paste', onPaste)
   }, [items])
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
+      if (target?.matches('input, textarea, [contenteditable="true"]')) return
+      if ((event.key === 'Delete' || event.key === 'Backspace') && (selectedId || selectedIds.length)) {
+        event.preventDefault()
+        deleteSelected()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [selectedId, selectedIds, items])
+
   const undo = () => {
     const previous = history.at(-1)
     if (!previous) return
@@ -365,7 +378,14 @@ export default function Page() {
     if (!next) return
     setHistory((prev) => [...prev, items]); setItems(next); setFuture((prev) => prev.slice(1))
   }
-  const deleteSelected = () => { if (selectedId) { commit(items.filter((item) => item.id !== selectedId)); setSelectedId(null) } }
+  const deleteSelected = () => {
+    const ids = selectedIds.length ? new Set(selectedIds) : selectedId ? new Set([selectedId]) : new Set<string>()
+    if (!ids.size) return
+    commit(items.filter((item) => !ids.has(item.id)))
+    setSelectedId(null)
+    setSelectedIds([])
+    setContextMenu(null)
+  }
   const moveLayer = (direction: 'front' | 'back') => {
     if (!selectedId) return
     const index = items.findIndex((item) => item.id === selectedId)
