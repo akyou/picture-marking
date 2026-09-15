@@ -86,13 +86,15 @@ function perspectiveRingPath(width: number, height: number, color: string, opaci
   const pitch = ringPitch * Math.PI / 180
   const R = width / 2
   const ry = R * Math.cos(pitch)
+  const d = (ringHeight / 2) * Math.sin(pitch)
+  const innerR = Math.max(1, R - Math.min(ringHeight, R - 1))
+  const innerRy = Math.max(1, ry - Math.min(ringHeight, R - 1) * Math.cos(pitch))
   const cx = width / 2
   const cy = height / 2
-  const innerR = Math.max(1, R - ringHeight)
-  const innerRy = Math.max(1, ry - ringHeight * Math.cos(pitch))
-  const outer = ellipsePath(cx, cy, R, ry)
-  const inner = ellipsePath(cx, cy, innerR, innerRy)
-  return { path: `${outer} ${inner}`, color, opacity }
+  const ellipse = (y: number, rx: number, radiusY: number) => `M ${cx - rx} ${y} A ${rx} ${radiusY} 0 1 0 ${cx + rx} ${y} A ${rx} ${radiusY} 0 1 0 ${cx - rx} ${y} Z`
+  const top = `${ellipse(cy - d, R, ry)} ${ellipse(cy - d, innerR, innerRy)}`
+  const bottom = `${ellipse(cy + d, R, ry)} ${ellipse(cy + d, innerR, innerRy)}`
+  return { path: `${top} ${bottom}`, color, opacity }
 }
 
 function arrowGeometry(width: number, height: number, curve = 0, headSize = 38, headAngle = 28, tipInset = 20, tailLength = 100) {
