@@ -41,6 +41,7 @@ import {
 } from 'lucide-react'
 
 type Point = { x: number; y: number }
+type CustomAsset = { id: string; name: string; src: string; aspectRatio: number }
 type Item =
   | { id: string; kind: 'text'; x: number; y: number; text: string; size: number; color: string; weight: string; italic: boolean; underline: boolean; align: 'left' | 'center' | 'right'; lineHeight: number; letterSpacing: number; width: number; locked?: boolean; hidden?: boolean }
   | { id: string; kind: 'image'; x: number; y: number; width: number; height: number; src: string; name: string; aspectRatio: number; lockRatio: boolean; locked?: boolean; hidden?: boolean }
@@ -184,6 +185,7 @@ export default function Page() {
   const [zoom, setZoom] = useState(100)
   const [petOpen, setPetOpen] = useState(true)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
+  const [customAssets, setCustomAssets] = useState<CustomAsset[]>([])
 
   useEffect(() => {
     const clearStaleDrag = () => {
@@ -208,11 +210,19 @@ export default function Page() {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
+    const storedAssets = window.localStorage.getItem('calm-flow-custom-assets')
+    if (storedAssets) {
+      try { setCustomAssets(JSON.parse(storedAssets)) } catch { /* ignore invalid custom assets */ }
+    }
     const stored = window.localStorage.getItem('calm-flow-board')
     if (stored) {
       try { setItems(JSON.parse(stored)) } catch { /* ignore invalid local board */ }
     }
   }, [])
+
+  useEffect(() => {
+    try { window.localStorage.setItem('calm-flow-custom-assets', JSON.stringify(customAssets)) } catch { console.warn('[v0] 自定义贴图超过浏览器存储容量') }
+  }, [customAssets])
 
   useEffect(() => {
     itemsRef.current = items
@@ -393,14 +403,24 @@ export default function Page() {
     commit([...items, item]); setSelectedId(item.id); setTool('select')
   }
 
-  const readFile = (file: File) => {
+  const addImageItem = (src: string, name: string, aspectRatio: number) => {
+    const width = 260
+    const item: Item = { id: crypto.randomUUID(), kind: 'image', x: 280, y: 270, width, height: Math.round(width / aspectRatio), src, name, aspectRatio, lockRatio: true }
+    commit([...itemsRef.current, item]); setSelectedId(item.id); setSelectedIds([item.id]); setTool('select')
+  }
+
+  const insertCustomAsset = (asset: CustomAsset) => addImageItem(asset.src, asset.name, asset.aspectRatio)
+  const removeCustomAsset = (id: string) => setCustomAssets((assets) => assets.filter((asset) => asset.id !== id))
+
+  const readFile = (file: File, saveToLibrary = true) => {
     const reader = new FileReader()
     reader.onload = () => {
       const src = String(reader.result)
       const image = new Image()
       image.onload = () => {
-        const item: Item = { id: crypto.randomUUID(), kind: 'image', x: 280, y: 270, width: image.naturalWidth, height: image.naturalHeight, src, name: file.name, aspectRatio: image.naturalWidth / image.naturalHeight, lockRatio: true }
-        commit([...items, item]); setSelectedId(item.id); setTool('select')
+        const aspectRatio = image.naturalWidth / image.naturalHeight
+        if (saveToLibrary) setCustomAssets((assets) => [{ id: crypto.randomUUID(), name: file.name, src, aspectRatio }, ...assets.filter((asset) => asset.src !== src)])
+        addImageItem(src, file.name, aspectRatio)
       }
       image.src = src
     }
@@ -526,7 +546,7 @@ export default function Page() {
       </header>
       <div className="workspace">
         <aside className="left-rail">
-          <div className="rail-section"><p className="eyebrow">工具</p><ToolbarButton label="选择" active={tool === 'select'} onClick={() => setTool('select')}><MousePointer2 size={19} /></ToolbarButton><ToolbarButton label="手型" onClick={() => setTool('select')}><Hand size={19} /></ToolbarButton><ToolbarButton label="画笔" active={tool === 'pen'} onClick={() => setTool('pen')}><Pencil size={19} /></ToolbarButton><ToolbarButton label="文字" active={tool === 'text'} onClick={addText}><Type size={19} /></ToolbarButton><ToolbarButton label="图片" onClick={() => fileRef.current?.click()}><ImagePlus size={19} /></ToolbarButton></div>
+          <div className="rail-section"><p className="eyebrow">工具</p><ToolbarButton label="选择" active={tool === 'select'} onClick={() => setTool('select')}><MousePointer2 size={19} /></ToolbarButton><ToolbarButton label="手型" onClick={() => setTool('select')}><Hand size={19} /></ToolbarButton><ToolbarButton label="画笔" active={tool === 'pen'} onClick={() => setTool('pen')}><Pencil size={19} /></ToolbarButton><ToolbarButton label="文字" active={tool === 'text'} onClick={addText}><Type size={19} /></ToolbarButton><ToolbarButton label="图片" onClick={() => fileRef.current?.click()}><ImagePlus size={19} /></ToolbarButton>{customAssets.length > 0 && <div className="custom-assets" aria-label="自定义贴图"><p className="eyebrow">贴图库</p>{customAssets.map((asset) => <div className="custom-asset" key={asset.id}><button type="button" title={`插入 ${asset.name}`} onClick={() => insertCustomAsset(asset)}><img src={asset.src} alt={asset.name} /></button><button type="button" className="custom-asset-remove" aria-label={`删除 ${asset.name}`} onClick={() => removeCustomAsset(asset.id)}><X size={10} /></button></div>)}</div>}</div>
           <div className="rail-divider" />
           <div className="rail-section"><p className="eyebrow">视图</p><ToolbarButton label="图层"><Layers3 size={19} /></ToolbarButton><ToolbarButton label="设置"><Settings2 size={19} /></ToolbarButton></div>
         </aside>
