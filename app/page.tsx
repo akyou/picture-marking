@@ -346,8 +346,16 @@ export default function Page() {
   }
 
   const onCanvasPointerUp = () => {
+    if (drawingRef.current) {
+      const points = drawingRef.current.points
+      drawingRef.current = null
+      setItems((prev) => prev.filter((item) => item.id !== 'draft'))
+      if (points.length > 1) commit([...itemsRef.current.filter((item) => item.id !== 'draft'), { id: crypto.randomUUID(), kind: 'stroke', points, color, width: penWidth, opacity: opacity / 100, rotation: 0 }])
+      return
+    }
     if (!selectionBox) {
       selectionStartRef.current = null
+      draggingRef.current = null
       return
     }
     if (selectionBox) {
@@ -369,12 +377,6 @@ export default function Page() {
       setSelectedId(ids[0] ?? null)
       setSelectionBox(null)
       selectionStartRef.current = null
-    }
-    if (drawingRef.current) {
-      const points = drawingRef.current.points
-      drawingRef.current = null
-      if (points.length > 1) commit([...items.filter((item) => item.id !== 'draft'), { id: crypto.randomUUID(), kind: 'stroke', points, color, width: penWidth, opacity: opacity / 100, rotation: 0 }])
-      return
     }
     draggingRef.current = null
   }
