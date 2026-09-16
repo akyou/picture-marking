@@ -83,8 +83,9 @@ function PerspectiveRingCanvas({ width, height, color, opacity, ringHeight, pitc
   useEffect(() => {
     const canvas = document.createElement('canvas')
     const dpr = window.devicePixelRatio || 1
+    const renderHeight = Math.max(height, width)
     canvas.width = width * dpr
-    canvas.height = height * dpr
+    canvas.height = renderHeight * dpr
     const ctx = canvas.getContext('2d')
     if (!ctx) return
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
@@ -93,7 +94,7 @@ function PerspectiveRingCanvas({ width, height, color, opacity, ringHeight, pitc
     const ry = R * Math.cos(p)
     const d = (ringHeight / 2) * Math.sin(p)
     const cx = width / 2
-    const cy = height / 2
+    const cy = renderHeight / 2
     const FILL = color
     ctx.fillStyle = FILL
     ctx.globalAlpha = opacity
@@ -108,7 +109,11 @@ function PerspectiveRingCanvas({ width, height, color, opacity, ringHeight, pitc
     ctx.closePath()
     ctx.fillStyle = FILL
     ctx.fill()
-    if (imageRef.current) imageRef.current.setAttribute('href', canvas.toDataURL())
+    if (imageRef.current) {
+      imageRef.current.setAttribute('href', canvas.toDataURL())
+      imageRef.current.setAttribute('y', String((height - renderHeight) / 2))
+      imageRef.current.setAttribute('height', String(renderHeight))
+    }
   }, [width, height, color, opacity, ringHeight, pitch])
   return <image ref={imageRef} x={0} y={0} width={width} height={height} pointerEvents="none" aria-label="透视圆柱侧壁" />
 }
