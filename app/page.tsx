@@ -79,36 +79,38 @@ function circlePerspective(angleRatio = 0.62) {
 }
 
 function PerspectiveRingCanvas({ width, height, color, opacity, ringHeight, pitch }: { width: number; height: number; color: string; opacity: number; ringHeight: number; pitch: number }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const imageRef = useRef<SVGImageElement>(null)
   useEffect(() => {
-    const canvas = canvasRef.current
-    const ctx = canvas?.getContext('2d')
-    if (!canvas || !ctx) return
+    const canvas = document.createElement('canvas')
     const dpr = window.devicePixelRatio || 1
     canvas.width = width * dpr
     canvas.height = height * dpr
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-    ctx.clearRect(0, 0, width, height)
     const p = pitch * Math.PI / 180
     const R = width / 2
     const ry = R * Math.cos(p)
     const d = (ringHeight / 2) * Math.sin(p)
     const cx = width / 2
     const cy = height / 2
-    ctx.fillStyle = color
+    const FILL = color
+    ctx.fillStyle = FILL
     ctx.globalAlpha = opacity
     ctx.beginPath()
     ctx.ellipse(cx, cy - d, R, ry, 0, 0, Math.PI * 2)
     ctx.ellipse(cx, cy + d, R, ry, 0, 0, Math.PI * 2)
     ctx.fill('evenodd')
     ctx.beginPath()
-    ctx.ellipse(cx, cy - d, R, ry, 0, Math.PI, Math.PI * 2)
+    ctx.ellipse(cx, cy - d, R, ry, 0, Math.PI, 0, true)
     ctx.lineTo(cx + R, cy + d)
-    ctx.ellipse(cx, cy + d, R, ry, 0, 0, Math.PI)
+    ctx.ellipse(cx, cy + d, R, ry, 0, 0, Math.PI, false)
     ctx.closePath()
+    ctx.fillStyle = FILL
     ctx.fill()
+    if (imageRef.current) imageRef.current.setAttribute('href', canvas.toDataURL())
   }, [width, height, color, opacity, ringHeight, pitch])
-  return <foreignObject x={0} y={0} width={width} height={height} pointerEvents="none"><div xmlns="http://www.w3.org/1999/xhtml" style={{ width, height, pointerEvents: 'none' }}><canvas ref={canvasRef} width={width} height={height} aria-label="透视圆环" style={{ display: 'block', width, height, pointerEvents: 'none' }} /></div></foreignObject>
+  return <image ref={imageRef} x={0} y={0} width={width} height={height} pointerEvents="none" aria-label="透视圆柱侧壁" />
 }
 
 function ellipsePath(cx: number, cy: number, rx: number, ry: number) {
