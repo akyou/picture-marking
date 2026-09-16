@@ -292,7 +292,7 @@ export default function Page() {
     const point = getPoint(event)
     const canvasRect = canvasRef.current?.getBoundingClientRect()
     // 普通点击���远只拖动当前对象；只有 Shift 才携带已有多选对象
-    const ids = event.shiftKey ? nextIds : [item.id]
+    const ids = !event.shiftKey && selectedIds.length > 1 && selectedIds.includes(item.id) ? selectedIds : (event.shiftKey ? nextIds : [item.id])
     const origins = Object.fromEntries(items.filter((candidate) => ids.includes(candidate.id) && candidate.kind !== 'stroke').map((candidate) => [candidate.id, { x: candidate.x, y: candidate.y }]))
     const strokePoints = Object.fromEntries(items.filter((candidate): candidate is Extract<Item, { kind: 'stroke' }> => ids.includes(candidate.id) && candidate.kind === 'stroke').map((candidate) => [candidate.id, candidate.points.map((strokePoint) => ({ ...strokePoint }))]))
     draggingRef.current = { id: item.id, start: point, origin: item.kind === 'stroke' ? { x: 0, y: 0 } : { x: item.x, y: item.y }, ids, origins, strokePoints, points: item.kind === 'stroke' ? item.points.map((strokePoint) => ({ ...strokePoint })) : undefined, canvasRect, zoom }
