@@ -108,7 +108,7 @@ function PerspectiveRingCanvas({ width, height, color, opacity, ringHeight, pitc
     ctx.closePath()
     ctx.fill()
   }, [width, height, color, opacity, ringHeight, pitch])
-  return <canvas ref={canvasRef} width={width} height={height} aria-label="透视圆环" style={{ position: 'absolute', inset: 0, width, height, pointerEvents: 'none' }} />
+  return <foreignObject x={0} y={0} width={width} height={height} pointerEvents="none"><div xmlns="http://www.w3.org/1999/xhtml" style={{ width, height, pointerEvents: 'none' }}><canvas ref={canvasRef} width={width} height={height} aria-label="透视圆环" style={{ display: 'block', width, height, pointerEvents: 'none' }} /></div></foreignObject>
 }
 
 function ellipsePath(cx: number, cy: number, rx: number, ry: number) {
