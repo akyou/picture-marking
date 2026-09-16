@@ -83,12 +83,12 @@ function ellipsePath(cx: number, cy: number, rx: number, ry: number) {
 }
 
 function perspectiveRingPath(width: number, height: number, color: string, opacity: number, ringHeight = 37, ringPitch = 45) {
-  const pitch = ringPitch * Math.PI / 180
+  const p = ringPitch * Math.PI / 180
   const R = width / 2
-  const ry = R * Math.cos(pitch)
-  const d = (ringHeight / 2) * Math.sin(pitch)
+  const ry = R * Math.cos(p)
+  const d = (ringHeight / 2) * Math.sin(p)
   const innerR = Math.max(1, R - Math.min(ringHeight, R - 1))
-  const innerRy = Math.max(1, ry - Math.min(ringHeight, R - 1) * Math.cos(pitch))
+  const innerRy = Math.max(1, ry - Math.min(ringHeight, R - 1) * Math.cos(p))
   const cx = width / 2
   const cy = height / 2
   const ellipse = (y: number, rx: number, radiusY: number) => `M ${cx - rx} ${y} A ${rx} ${radiusY} 0 1 0 ${cx + rx} ${y} A ${rx} ${radiusY} 0 1 0 ${cx - rx} ${y} Z`
